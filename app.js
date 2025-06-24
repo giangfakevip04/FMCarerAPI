@@ -20,4 +20,7 @@ app.use('/api/schedules', scheduleRoutes);
 const logRoutes = require('./routes/logRoutes');
 app.use('/api/logs', logRoutes);
 
+const notificationRoutes = require('./routes/notificationRoutes');
+app.use('/api/notifications', notificationRoutes);
+
 module.exports = app;
