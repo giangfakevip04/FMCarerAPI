@@ -23,4 +23,7 @@ app.use('/api/logs', logRoutes);
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/api/notifications', notificationRoutes);
 
+const postRoutes = require('./routes/postRoutes');
+app.use('/api/posts', postRoutes);
+
 module.exports = app;
