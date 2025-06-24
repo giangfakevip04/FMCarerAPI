@@ -29,4 +29,7 @@ app.use('/api/posts', postRoutes);
 const paymentRoutes = require('./routes/paymentRoutes');
 app.use('/api/payments', paymentRoutes);
 
+const complaintRoutes = require('./routes/complaintRoutes');
+app.use('/api/complaints', complaintRoutes);
+
 module.exports = app;
