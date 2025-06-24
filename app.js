@@ -14,4 +14,7 @@ app.use('/api/users', userRoutes);
 const childRoutes = require('./routes/childRoutes');
 app.use('/api/children', childRoutes);
 
+const scheduleRoutes = require('./routes/scheduleRoutes');
+app.use('/api/schedules', scheduleRoutes);
+
 module.exports = app;
