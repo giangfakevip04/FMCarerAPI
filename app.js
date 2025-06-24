@@ -11,4 +11,7 @@ app.use('/api/auth', authRoutes);
 const userRoutes = require('./routes/userRoutes');
 app.use('/api/users', userRoutes);
 
+const childRoutes = require('./routes/childRoutes');
+app.use('/api/children', childRoutes);
+
 module.exports = app;
