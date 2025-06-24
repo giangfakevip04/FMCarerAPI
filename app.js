@@ -26,4 +26,7 @@ app.use('/api/notifications', notificationRoutes);
 const postRoutes = require('./routes/postRoutes');
 app.use('/api/posts', postRoutes);
 
+const paymentRoutes = require('./routes/paymentRoutes');
+app.use('/api/payments', paymentRoutes);
+
 module.exports = app;
