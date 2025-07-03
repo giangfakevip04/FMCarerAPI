@@ -29,14 +29,24 @@ exports.createSchedule = async (req, res) => {
 
 /**
  * Lấy tất cả lịch chăm sóc của một trẻ.
+ * Trả về thêm childName để dùng trong Android app.
  *
  * @param {Object} req - Request chứa childId trong param
  * @param {Object} res - Response trả về danh sách lịch
  */
 exports.getSchedulesByChild = async (req, res) => {
     try {
-        const schedules = await Schedule.find({ childId: req.params.childId });
-        res.status(200).json(schedules);
+        const schedules = await Schedule.find({ childId: req.params.childId })
+            .populate('childId', 'name');
+
+        // Thêm trường childName từ populate vào mỗi lịch
+        const result = schedules.map(schedule => {
+            const obj = schedule.toObject();
+            obj.childName = schedule.childId?.name || 'Không rõ';
+            return obj;
+        });
+
+        res.status(200).json(result);
     } catch (err) {
         res.status(500).json({ message: 'Lỗi lấy lịch chăm sóc', error: err.message });
     }
