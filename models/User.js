@@ -1,61 +1,81 @@
+const mongoose = require('mongoose');
+
 /**
- * Model Mongoose cho người dùng.
- * Gồm các trường cơ bản: email, password (hash), role, status, createdAt.
- * Hỗ trợ so sánh mật khẩu đã hash.
+ * @typedef {Object} User
+ * @property {string} email - Địa chỉ email (bắt buộc với parent/admin, không yêu cầu với subuser).
+ * @property {string} password - Mật khẩu đã mã hóa.
+ * @property {'parent' | 'subuser' | 'admin'} role - Vai trò người dùng.
+ * @property {mongoose.Types.ObjectId|null} created_by - ID người tạo (dành cho subuser).
+ * @property {number} balance - Số dư tài khoản.
+ * @property {boolean} isVerified - Trạng thái đã xác minh tài khoản.
+ * @property {string} fullname - Họ tên người dùng.
+ * @property {string} numberphone - Số điện thoại (bắt buộc với subuser).
+ * @property {string} image - Đường dẫn ảnh đại diện.
+ * @property {Date} created_at - Ngày tạo tài khoản.
  */
 
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-
-const userSchema = new mongoose.Schema({
+/**
+ * Schema người dùng của hệ thống.
+ * Gồm các loại: parent (tài khoản chính), subuser (tài khoản phụ), admin.
+ */
+const UserSchema = new mongoose.Schema({
     email: {
         type: String,
-        required: [true, 'Email là bắt buộc'],
-        unique: true
+        required: function () {
+            return this.role !== 'subuser';
+        },
+        unique: true,
+        sparse: true,
+        maxlength: 100
     },
     password: {
         type: String,
-        required: [true, 'Mật khẩu là bắt buộc']
+        required: true
     },
     role: {
         type: String,
-        enum: ['main', 'sub', 'admin'],
-        default: 'main'
+        enum: ['parent', 'subuser', 'admin'],
+        default: 'parent',
+        index: true
     },
-    status: {
+    created_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+        index: true
+    },
+    balance: {
+        type: mongoose.Decimal128,
+        default: 0.00
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    fullname: {
         type: String,
-        enum: ['active', 'inactive'],
-        default: 'active'
+        default: ''
     },
-    createdAt: {
+    numberphone: {
+        type: String,
+        required: function () {
+            return this.role === 'subuser';
+        },
+        unique: function () {
+            return this.role === 'subuser';
+        },
+        sparse: true
+    },
+    image: {
+        type: String,
+        default: ''
+    },
+    created_at: {
         type: Date,
         default: Date.now
     }
+}, {
+    collection: 'users'
 });
 
-/**
- * Tự động hash mật khẩu trước khi lưu vào database (nếu được chỉnh sửa).
- */
-userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) return next();
-
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (err) {
-        next(err);
-    }
-});
-
-/**
- * So sánh mật khẩu nhập vào với mật khẩu đã mã hoá trong DB.
- *
- * @param {string} inputPassword - mật khẩu người dùng nhập
- * @returns {Promise<boolean>} - true nếu khớp, false nếu sai
- */
-userSchema.methods.comparePassword = function (inputPassword) {
-    return bcrypt.compare(inputPassword, this.password);
-};
-
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', UserSchema);

@@ -1,16 +1,30 @@
-/**
- * Tạo JWT token từ thông tin người dùng.
- * Token được dùng để xác thực người dùng trong các route bảo vệ.
- *
- * @param {Object} user - Thông tin người dùng (có _id và role)
- * @returns {string} - Chuỗi JWT token
- */
+require('dotenv').config(); // Đọc biến môi trường từ .env
 const jwt = require('jsonwebtoken');
 
-exports.generateToken = (user) => {
-    return jwt.sign(
-        { id: user._id, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-    );
+const SECRET = process.env.JWT_SECRET || 'fallback_secret';
+
+/**
+ * Tạo JWT token từ payload.
+ *
+ * @param {Object} payload - Dữ liệu cần mã hóa
+ * @param {string} [expiresIn='7d'] - Thời hạn token (mặc định: 7 ngày)
+ * @returns {string} - JWT token đã ký
+ */
+exports.generateToken = (payload, expiresIn = '7d') => {
+    return jwt.sign(payload, SECRET, { expiresIn });
+};
+
+/**
+ * Xác thực token JWT.
+ *
+ * @param {string} token - Token JWT cần kiểm tra
+ * @returns {Object|null} - Payload đã giải mã nếu hợp lệ, hoặc null nếu sai
+ */
+exports.verifyToken = (token) => {
+    try {
+        return jwt.verify(token, SECRET);
+    } catch (err) {
+        console.error("❌ Lỗi trong verifyToken:", err.message);
+        return null;
+    }
 };
