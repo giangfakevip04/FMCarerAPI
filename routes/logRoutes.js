@@ -1,54 +1,55 @@
 /**
- * Định nghĩa route quản lý nhật ký chăm sóc (logs).
+ * Định tuyến xử lý "nhật ký chăm sóc" (logs), kết nối với reminderController.
  * Base path: /api/logs
  */
 
 const express = require('express');
 const router = express.Router();
 const {
-    createLog,
-    getLogsByChild,
-    getLogsBySchedule,
-    updateLog,
-    deleteLog
-} = require('../controllers/logController');
-const { protect } = require('../middlewares/authMiddleware');
+    createReminder,
+    getRemindersByChild,
+    getReminderById,
+    updateReminder,
+    deleteReminder
+} = require('../controllers/reminderController');
+const { requireAuth } = require('../middlewares/auth');
 
-router.use(protect);
+// Áp dụng middleware bảo vệ
+router.use(requireAuth);
 
 /**
  * @route POST /api/logs
  * @desc Tạo nhật ký chăm sóc mới
  * @access Private
  */
-router.post('/', createLog);
+router.post('/', createReminder);
 
 /**
  * @route GET /api/logs/:childId
- * @desc Lấy nhật ký theo trẻ
+ * @desc Lấy nhật ký theo ID trẻ
  * @access Private
  */
-router.get('/:childId', getLogsByChild);
+router.get('/:childId', getReminderById);
 
 /**
  * @route GET /api/logs/by-schedule/:scheduleId
- * @desc Lấy nhật ký theo lịch
+ * @desc Lấy nhật ký theo lịch nhắc nhở
  * @access Private
  */
-router.get('/by-schedule/:scheduleId', getLogsBySchedule);
+router.get('/by-schedule/:scheduleId', getReminderById);
 
 /**
  * @route PUT /api/logs/:id
- * @desc Cập nhật log
+ * @desc Cập nhật nhật ký chăm sóc
  * @access Private
  */
-router.put('/:id', updateLog);
+router.put('/:id', updateReminder);
 
 /**
  * @route DELETE /api/logs/:id
- * @desc Xoá log
+ * @desc Xóa nhật ký chăm sóc
  * @access Private
  */
-router.delete('/:id', deleteLog);
+router.delete('/:id', deleteReminder);
 
 module.exports = router;

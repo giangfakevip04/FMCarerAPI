@@ -1,55 +1,39 @@
 /**
- * Route quản lý bài viết chia sẻ.
+ * Định tuyến xử lý bài viết người dùng (giống mạng xã hội mini).
  * Base path: /api/posts
  */
 
 const express = require('express');
 const router = express.Router();
-const {
-    createPost,
-    getAllPosts,
-    updatePost,
-    deletePost,
-    approvePost
-} = require('../controllers/postController');
+const postController = require('../controllers/postController');
+const { requireAuth } = require('../middlewares/auth');
 
-const { protect, restrictTo } = require('../middlewares/authMiddleware');
-
-router.use(protect);
+/**
+ * @route GET /api/posts
+ * @desc Lấy tất cả bài viết (không cần xác thực)
+ * @access Public
+ */
+router.get('/', postController.getAllPosts);
 
 /**
  * @route POST /api/posts
  * @desc Tạo bài viết mới
  * @access Private
  */
-router.post('/', createPost);
+router.post('/', requireAuth, postController.createPost);
 
 /**
- * @route GET /api/posts
- * @desc Lấy danh sách bài viết (công khai hoặc nội bộ)
+ * @route PUT /api/posts/:postId
+ * @desc Cập nhật bài viết
  * @access Private
  */
-router.get('/', getAllPosts);
+router.put('/:postId', requireAuth, postController.updatePost);
 
 /**
- * @route PUT /api/posts/:id
- * @desc Cập nhật bài viết
- * @access Private (chỉ người tạo)
- */
-router.put('/:id', updatePost);
-
-/**
- * @route PUT /api/posts/:id/approve
- * @desc Duyệt bài viết
- * @access Private (admin)
- */
-router.put('/:id/approve', restrictTo('admin'), approvePost);
-
-/**
- * @route DELETE /api/posts/:id
+ * @route DELETE /api/posts/:postId
  * @desc Xoá bài viết
- * @access Private (chủ sở hữu hoặc admin)
+ * @access Private
  */
-router.delete('/:id', deletePost);
+router.delete('/:postId', requireAuth, postController.deletePost);
 
 module.exports = router;

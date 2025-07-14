@@ -1,48 +1,28 @@
-/**
- * Định nghĩa các endpoint quản lý thông tin trẻ em.
- * Base path: /api/children
- */
-
+// 👉 childRoutes.js
 const express = require('express');
 const router = express.Router();
-const {
-    addChild,
-    getChildren,
-    updateChild,
-    deleteChild
-} = require('../controllers/childController');
-
-const { protect } = require('../middlewares/authMiddleware');
-
-// Bắt buộc phải đăng nhập với mọi route
-router.use(protect);
+const childController = require('../controllers/childController');
+const { requireAuth } = require('../middlewares/auth');
 
 /**
- * @route POST /api/children
- * @desc Thêm thông tin trẻ mới
- * @access Private
+ * Định tuyến cho các chức năng quản lý trẻ em.
+ * Base path: /api/children
+ * Yêu cầu xác thực qua middleware `requireAuth`.
  */
-router.post('/', addChild);
 
-/**
- * @route GET /api/children
- * @desc Lấy danh sách trẻ thuộc user hiện tại
- * @access Private
- */
-router.get('/', getChildren);
+// ✅ Tạo trẻ mới
+router.post('/', requireAuth, childController.createChild);
 
-/**
- * @route PUT /api/children/:id
- * @desc Cập nhật thông tin trẻ
- * @access Private
- */
-router.put('/:id', updateChild);
+// ✅ Lấy danh sách trẻ theo user
+router.get('/my', requireAuth, childController.getChildrenByUser);
 
-/**
- * @route DELETE /api/children/:id
- * @desc Xoá trẻ theo ID
- * @access Private
- */
-router.delete('/:id', deleteChild);
+// ✅ Lấy chi tiết trẻ
+router.get('/:childId', requireAuth, childController.getChildById);
+
+// ✅ Cập nhật trẻ
+router.put('/:childId', requireAuth, childController.updateChild);
+
+// ✅ Xoá trẻ
+router.delete('/:childId', requireAuth, childController.deleteChild);
 
 module.exports = router;

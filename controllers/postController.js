@@ -1,99 +1,149 @@
-/**
- * Controller quản lý bài viết (Post).
- * Người dùng tạo bài viết; admin có thể duyệt hoặc xoá.
- */
-
-const Post = require('../models/Post');
+const Post = require('../models/Posts');
+const User = require('../models/User');
 
 /**
- * Tạo bài viết mới.
- */
-exports.createPost = async (req, res) => {
-    try {
-        const { content, level } = req.body;
-        const post = await Post.create({
-            content,
-            level,
-            createdBy: req.user.id
-        });
-        res.status(201).json(post);
-    } catch (err) {
-        res.status(500).json({ message: 'Lỗi tạo bài viết', error: err.message });
-    }
-};
-
-/**
- * Lấy tất cả bài viết (lọc theo level nếu có).
+ * Lấy toàn bộ danh sách bài viết trong hệ thống.
+ * Mỗi bài viết sẽ được bổ sung thêm thông tin người đăng gồm: họ tên và ảnh đại diện.
+ * Ưu tiên `avatar_url`, nếu không có thì dùng `image`, nếu cả hai đều không có thì để rỗng.
+ *
+ * @route GET /api/posts
+ * @access Công khai
  */
 exports.getAllPosts = async (req, res) => {
     try {
-        const filter = {};
-        if (req.query.level) {
-            filter.level = req.query.level;
-            filter.status = 'approved';
-        }
-        const posts = await Post.find(filter)
-            .populate('createdBy', 'email role')
-            .populate('approvedBy', 'email role')
-            .sort({ createdAt: -1 });
-        res.json(posts);
-    } catch (err) {
-        res.status(500).json({ message: 'Lỗi lấy danh sách bài viết', error: err.message });
+        const posts = await Post.find().sort({ created_at: -1 }).lean();
+
+        const populatedPosts = await Promise.all(
+            posts.map(async (post) => {
+                const user = await User.findById(post.id_user).lean();
+                if (user) {
+                    post.fullname = user.fullname;
+                    post.image = user.avatar_url || user.image || '';
+                } else {
+                    post.fullname = 'Ẩn danh';
+                    post.image = '';
+                }
+                return post;
+            })
+        );
+
+        res.status(200).json(populatedPosts);
+
+    } catch (error) {
+        console.error('Error getAllPosts:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal Server Error',
+            error: error.message
+        });
     }
 };
 
 /**
- * Cập nhật bài viết (chỉ chủ sở hữu được sửa).
+ * Tạo mới một bài viết.
+ * Nội dung bài viết có thể gồm văn bản và danh sách đường dẫn hình ảnh.
+ * Thêm snapshot của người đăng gồm: fullname và avatar vào bài viết.
+ *
+ * @route POST /api/posts
+ * @access Công khai
+ */
+exports.createPost = async (req, res) => {
+    try {
+        const { userId, content, selectedVisibility, mediaUrls } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        const postFullname = user.fullname || 'Ẩn danh';
+        const postImage = user.avatar_url || user.image || '';
+
+        const newPost = new Post({
+            id_user: userId,
+            fullname: postFullname,
+            image: postImage,
+            content: content,
+            media_urls: mediaUrls,
+            visibility: selectedVisibility,
+            status: 'active'
+        });
+
+        const savedPost = await newPost.save();
+        res.status(201).json({
+            success: true,
+            message: 'Post created successfully',
+            post: savedPost
+        });
+
+    } catch (error) {
+        console.error('Error creating post:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
+    }
+};
+
+/**
+ * Cập nhật nội dung một bài viết theo ID.
+ * Cho phép sửa nội dung, ảnh, trạng thái và chế độ hiển thị.
+ *
+ * @route PUT /api/posts/:postId
+ * @access Công khai
  */
 exports.updatePost = async (req, res) => {
     try {
-        const post = await Post.findOneAndUpdate(
-            { _id: req.params.id, createdBy: req.user.id },
-            req.body,
+        const { postId } = req.params;
+        const { content, media_urls, visibility, status } = req.body;
+
+        const updated = await Post.findByIdAndUpdate(
+            postId,
+            {
+                content,
+                media_urls,
+                visibility,
+                status,
+                updated_at: Date.now()
+            },
             { new: true }
         );
-        if (!post) return res.status(404).json({ message: 'Không tìm thấy bài viết để cập nhật' });
-        res.json(post);
-    } catch (err) {
-        res.status(500).json({ message: 'Lỗi cập nhật bài viết', error: err.message });
+
+        if (!updated) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Post updated successfully',
+            post: updated
+        });
+    } catch (error) {
+        console.error('Error updatePost:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
     }
 };
 
 /**
- * Duyệt bài viết (chỉ admin).
- */
-exports.approvePost = async (req, res) => {
-    try {
-        const post = await Post.findByIdAndUpdate(
-            req.params.id,
-            { status: 'approved', approvedBy: req.user.id },
-            { new: true }
-        );
-        if (!post) return res.status(404).json({ message: 'Không tìm thấy bài để duyệt' });
-        res.json(post);
-    } catch (err) {
-        res.status(500).json({ message: 'Lỗi duyệt bài viết', error: err.message });
-    }
-};
-
-/**
- * Xoá bài viết.
+ * Xoá một bài viết theo ID.
+ *
+ * @route DELETE /api/posts/:postId
+ * @access Công khai
  */
 exports.deletePost = async (req, res) => {
     try {
-        const post = await Post.findById(req.params.id);
-        if (!post) return res.status(404).json({ message: 'Không tìm thấy bài để xoá' });
+        const { postId } = req.params;
 
-        const isOwner = post.createdBy.toString() === req.user.id;
-        const isAdmin = req.user.role === 'admin';
-
-        if (!isOwner && !isAdmin) {
-            return res.status(403).json({ message: 'Không có quyền xoá bài viết này' });
+        const deleted = await Post.findByIdAndDelete(postId);
+        if (!deleted) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
         }
 
-        await post.remove();
-        res.json({ message: 'Đã xoá bài viết thành công' });
-    } catch (err) {
-        res.status(500).json({ message: 'Lỗi xoá bài viết', error: err.message });
+        res.status(200).json({
+            success: true,
+            message: 'Post deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deletePost:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
     }
 };
+
+module.exports = exports;
