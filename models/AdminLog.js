@@ -1,15 +1,12 @@
 const mongoose = require('mongoose');
 
 /**
+ * @desc Định nghĩa schema cho AdminLog, lưu trữ các hành động của Admin.
  * @typedef {Object} AdminLog
- * @property {mongoose.Types.ObjectId} admin_id - ID của quản trị viên thực hiện hành động (tham chiếu tới User).
- * @property {string} action - Mô tả hành động mà admin đã thực hiện.
- * @property {Date} created_at - Thời điểm ghi nhận hành động (mặc định là thời gian hiện tại).
- */
-
-/**
- * Schema lưu nhật ký hoạt động của quản trị viên.
- * Dùng để theo dõi các thao tác hệ thống do admin thực hiện.
+ * @property {mongoose.Schema.Types.ObjectId} admin_id - ID của Admin thực hiện hành động, tham chiếu đến model User.
+ * @property {string} action - Mô tả hành động mà Admin đã thực hiện.
+ * @property {Date} created_at - Thời gian hành động được ghi lại, mặc định là thời điểm hiện tại.
+ * @property {Object} _id - ID tự động của document trong MongoDB.
  */
 const AdminLogSchema = new mongoose.Schema({
     admin_id: {
@@ -24,8 +21,6 @@ const AdminLogSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
-}, {
-    collection: 'admin_logs' // Gán rõ tên collection trong MongoDB
-});
+}, { collection: 'admin_logs' });
 
 module.exports = mongoose.model('AdminLog', AdminLogSchema);
