@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Admin - FMCarer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f6f4fa;
+            color: #333;
+        }
+
+        .navbar {
+            background-color: #722dd3;
+        }
+
+        .navbar-brand, .navbar .btn {
+            color: #fff !important;
+        }
+
+        .admin-card {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .admin-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 20px;
+            border: 3px solid #1e88e5;
+        }
+
+        .dashboard-grid .card {
+            transition: all 0.2s ease-in-out;
+        }
+
+        .dashboard-grid .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .notification-badge {
+            background-color: #e53935;
+            color: #fff;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: bold;
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            display: none;
+        }
+
+        .notification-badge.show {
+            display: inline-block;
+        }
+
+        .dashboard-icon {
+            font-size: 24px;
+            color: #722dd3;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg">
+    <div class="container-fluid">
+        <span class="navbar-brand fw-bold">Trang Quản Trị FMCarer</span>
+        <form class="d-flex" method="POST" action="/admin/logout">
+            <button class="btn btn-danger">Đăng xuất</button>
+        </form>
+    </div>
+</nav>
+
+<div class="container py-4">
+
+    <% if (admin) { %>
+        <div class="admin-card mb-4">
+            <img src="<%= admin.image || 'https://placehold.co/80x80/722DD3/FFFFFF?text=Admin' %>" alt="Avatar" class="admin-avatar" />
+            <div>
+                <h5 class="mb-1"><%= admin.fullname || admin.username %></h5>
+                <small class="text-muted">Vai trò: <%= admin.role || 'Admin' %></small>
+            </div>
+        </div>
+    <% } else { %>
+        <div class="alert alert-danger">Không tìm thấy thông tin admin</div>
+    <% } %>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 dashboard-grid">
+
+        <div class="col">
+            <a href="/admin/users" class="card p-3 position-relative text-decoration-none h-100">
+                <div class="notification-badge" id="user-notification"></div>
+                <div class="dashboard-icon">👥</div>
+                <h5 class="mt-2">Quản lý người dùng</h5>
+                <p class="mb-0 text-muted">Xem và duyệt danh sách phụ huynh</p>
+            </a>
+        </div>
+
+        <div class="col">
+            <a href="/admin/posts" class="card p-3 position-relative text-decoration-none h-100">
+                <div class="notification-badge" id="post-notification"></div>
+                <div class="dashboard-icon">📝</div>
+                <h5 class="mt-2">Quản lý bài viết</h5>
+                <p class="mb-0 text-muted">Duyệt, chỉnh sửa hoặc xoá bài viết</p>
+            </a>
+        </div>
+
+        <div class="col">
+            <a href="/admin/reminders" class="card p-3 position-relative text-decoration-none h-100">
+                <div class="notification-badge" id="reminder-notification"></div>
+                <div class="dashboard-icon">📅</div>
+                <h5 class="mt-2">Quản lý nhắc nhở</h5>
+                <p class="mb-0 text-muted">Thống kê các nhắc nhở quan trọng</p>
+            </a>
+        </div>
+
+        <div class="col">
+            <a href="/admin/statistics" class="card p-3 position-relative text-decoration-none h-100">
+                <div class="dashboard-icon">📊</div>
+                <h5 class="mt-2">Thống kê hệ thống</h5>
+                <p class="mb-0 text-muted">Xem tổng số người dùng, bài viết, trẻ em</p>
+            </a>
+        </div>
+
+        <div class="col">
+            <a href="/admin/settings" class="card p-3 position-relative text-decoration-none h-100">
+                <div class="dashboard-icon">⚙️</div>
+                <h5 class="mt-2">Cài đặt hệ thống</h5>
+                <p class="mb-0 text-muted">Cập nhật cấu hình, vai trò người dùng</p>
+            </a>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    async function fetchNotifications() {
+        try {
+            const [userRes, postRes, reminderRes] = await Promise.all([
+                fetch('/admin/api/notifications/users'),
+                fetch('/admin/api/notifications/posts'),
+                fetch('/admin/api/notifications/reminders')
+            ]);
+            const userData = await userRes.json();
+            const postData = await postRes.json();
+            const reminderData = await reminderRes.json();
+
+            updateBadge('user-notification', userData.count);
+            updateBadge('post-notification', postData.count);
+            updateBadge('reminder-notification', reminderData.count);
+        } catch (err) {
+            console.error('Lỗi tải thông báo:', err);
+        }
+    }
+
+    function updateBadge(id, count) {
+        const el = document.getElementById(id);
+        if (el) {
+            if (count > 0) {
+                el.textContent = count;
+                el.classList.add('show');
+            } else {
+                el.textContent = '';
+                el.classList.remove('show');
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchNotifications);
+</script>
+
+</body>
+</html>

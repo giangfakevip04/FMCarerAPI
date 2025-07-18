@@ -1,46 +1,93 @@
+/**
+ * @fileoverview Mongoose schema cho thông tin trẻ nhỏ do người dùng quản lý.
+ * @module models/Child
+ */
+
 const mongoose = require('mongoose');
 
 /**
- * @typedef {Object} Child
- * @property {mongoose.Types.ObjectId} user_id - ID của người dùng (cha mẹ) sở hữu trẻ này (tham chiếu tới User).
- * @property {string} name - Tên của trẻ.
- * @property {Date} dob - Ngày sinh của trẻ.
- * @property {'male' | 'female' | 'other'} gender - Giới tính của trẻ (nam, nữ, hoặc khác).
- * @property {string} [avatar_url] - Đường dẫn ảnh đại diện của trẻ (nếu có).
- * @property {Date} created_at - Ngày tạo hồ sơ trẻ (mặc định là ngày hiện tại).
- */
-
-/**
- * Schema đại diện cho thông tin một trẻ em trong hệ thống.
- * Mỗi trẻ gắn với một user cha/mẹ cụ thể.
+ * ChildSchema
+ * Đại diện cho một đứa trẻ được quản lý trong hệ thống bởi người dùng.
  */
 const ChildSchema = new mongoose.Schema({
+    /**
+     * ID của người dùng quản lý trẻ này.
+     * @type {mongoose.Types.ObjectId}
+     */
     user_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
     },
+
+    /**
+     * Tên trẻ.
+     * @type {string}
+     */
     name: {
         type: String,
         required: true,
         maxlength: 100
     },
+
+    /**
+     * Ngày sinh của trẻ.
+     * @type {Date}
+     */
     dob: {
         type: Date,
         required: true
     },
+
+    /**
+     * Giới tính của trẻ.
+     * @type {'male' | 'female' | 'other'}
+     */
     gender: {
         type: String,
         enum: ['male', 'female', 'other'],
         required: true
     },
+
+    /**
+     * Ảnh đại diện của trẻ (nếu có).
+     * @type {string}
+     */
     avatar_url: {
-        type: String // Đường dẫn ảnh đại diện nếu có
+        type: String
     },
+
+    /**
+     * Ngày tạo bản ghi (theo giờ Việt Nam).
+     * @type {Date}
+     */
     created_at: {
-        type: Date,
-        default: Date.now
+        type: Date
     }
-}, { collection: 'children' });
+}, {
+    collection: 'children',
+    timestamps: false // Không dùng createdAt/updatedAt mặc định
+});
+
+/**
+ * Middleware trước khi lưu: gán created_at nếu chưa có,
+ * theo múi giờ GMT+7 (giờ Việt Nam).
+ */
+ChildSchema.pre('save', function (next) {
+    if (!this.created_at) {
+        this.created_at = new Date(Date.now() + 7 * 60 * 60 * 1000); // GMT+7
+    }
+    next();
+});
+
+/**
+ * @typedef {Object} Child
+ * @property {mongoose.Types.ObjectId} user_id - ID người dùng quản lý
+ * @property {string} name - Tên trẻ
+ * @property {Date} dob - Ngày sinh
+ * @property {'male' | 'female' | 'other'} gender - Giới tính
+ * @property {string} [avatar_url] - Ảnh đại diện (nếu có)
+ * @property {Date} created_at - Ngày tạo
+ */
 
 module.exports = mongoose.model('Child', ChildSchema);

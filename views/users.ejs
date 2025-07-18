@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Quản lý người dùng</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <style>
+        :root {
+            --primary-color: #6A1B9A;
+            --primary-light: #9C27B0;
+            --secondary-color: #039BE5;
+            --background-light: #F8F9FA;
+            --white: #FFFFFF;
+            --text-dark: #212121;
+            --text-medium: #424242;
+            --text-light: #757575;
+            --border-light: #E0E0E0;
+            --success-green: #388E3C;
+            --alert-red: #D32F2F;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background-light);
+            margin: 0;
+            padding: 2rem;
+            color: var(--text-medium);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-bottom: 1rem;
+            background-color: var(--secondary-color);
+            color: var(--white);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            font-weight: 500;
+        }
+
+        .back-button:hover {
+            background-color: #0288D1;
+            transform: translateY(-2px);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--white);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            margin-bottom: 2rem;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: center;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        th {
+            background-color: #f3f3f3;
+            color: var(--primary-color);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        tbody tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-suspend {
+            background-color: var(--alert-red);
+            color: var(--white);
+        }
+
+        .btn-unsuspend {
+            background-color: var(--success-green);
+            color: var(--white);
+        }
+
+        .btn-detail {
+            background-color: var(--secondary-color);
+            color: var(--white);
+        }
+
+        .status-active {
+            background-color: #e6f4ea;
+            color: var(--success-green);
+            padding: 0.3rem 0.8rem;
+            border-radius: 1rem;
+            font-weight: 500;
+        }
+
+        .status-suspended {
+            background-color: #fdecea;
+            color: var(--alert-red);
+            padding: 0.3rem 0.8rem;
+            border-radius: 1rem;
+            font-weight: 500;
+        }
+
+        .statistics {
+            background-color: var(--white);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            font-size: 1rem;
+            color: var(--text-dark);
+        }
+
+        .stat-item strong {
+            display: block;
+            font-size: 1.5rem;
+            color: var(--primary-light);
+        }
+    </style>
+</head>
+<body>
+<a href="/admin/dashboard" class="back-button"><i class="fas fa-arrow-left"></i> Quay lại Dashboard</a>
+<h1>Danh sách người dùng</h1>
+
+<table>
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>Tên</th>
+        <th>Email</th>
+        <th>Điện thoại</th>
+        <th>Trạng thái</th>
+        <th>Hành động</th>
+    </tr>
+    </thead>
+    <tbody>
+    <% users.forEach(user => { %>
+        <tr>
+            <td><%= user._id %></td>
+            <td><%= user.fullname || user.email %></td>
+            <td><%= user.email %></td>
+            <td><%= user.numberphone || 'N/A' %></td>
+            <td>
+            <span class="<%= user.isSuspended ? 'status-suspended' : 'status-active' %>">
+              <%= user.isSuspended ? 'Đã đình chỉ' : 'Đang hoạt động' %>
+            </span>
+            </td>
+            <td>
+                <button class="btn <%= user.isSuspended ? 'btn-unsuspend' : 'btn-suspend' %> toggle-suspend-btn" data-user-id="<%= user._id %>" data-is-suspended="<%= user.isSuspended %>">
+                    <%= user.isSuspended ? 'Mở đình chỉ' : 'Đình chỉ' %>
+                </button>
+                <button class="btn btn-detail view-detail-btn" data-user-id="<%= user._id %>">Xem chi tiết</button>
+            </td>
+        </tr>
+    <% }) %>
+    </tbody>
+</table>
+
+<div class="statistics">
+    <div class="stat-item">
+        <span>Tài khoản chính</span>
+        <strong><%= parentCount %></strong>
+    </div>
+    <div class="stat-item">
+        <span>Tài khoản phụ</span>
+        <strong><%= subuserCount %></strong>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.toggle-suspend-btn').forEach(button => {
+            button.addEventListener('click', async (event) => {
+                const userId = event.target.dataset.userId;
+                const isSuspended = event.target.dataset.isSuspended === 'true';
+                const confirmMsg = isSuspended ? 'Mở đình chỉ' : 'Đình chỉ';
+
+                if (!confirm(`Bạn có chắc chắn muốn ${confirmMsg} người dùng này?`)) return;
+
+                try {
+                    const res = await fetch(`/admin/users/${userId}/toggle-suspension`, { method: 'POST' });
+                    const data = await res.json();
+
+                    if (res.ok && data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.message || 'Có lỗi xảy ra.');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Không thể kết nối đến máy chủ.');
+                }
+            });
+        });
+
+        document.querySelectorAll('.view-detail-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const userId = e.target.dataset.userId;
+                window.location.href = `/admin/users/${userId}/details`;
+            });
+        });
+    });
+</script>
+</body>
+</html>

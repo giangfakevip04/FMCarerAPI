@@ -1,45 +1,46 @@
+/**
+ * @module usersController
+ * @description Controller handling user-related operations including registration, login, updates,
+ * and subuser management for the FMCarer system.
+ */
+
 const User = require('../models/User');
-const OTP = require('../models/OTP'); // Giả định OTP model vẫn được sử dụng nếu có chức năng liên quan đến OTP
+const OTP = require('../models/OTP');
 const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
-const { generateToken } = require('../utils/token'); // Đảm bảo đường dẫn này đúng
-const crypto = require('crypto'); // Import module crypto để tạo chuỗi ngẫu nhiên
+const { generateToken } = require('../utils/token');
+const crypto = require('crypto');
 
 /**
- * @desc Chuẩn hóa số điện thoại để lưu trữ đồng nhất.
- * @param {string} phone - Số điện thoại cần chuẩn hóa.
- * @returns {string} - Số điện thoại đã được chuẩn hóa.
+ * @function normalizePhoneNumber
+ * @description Normalizes a phone number by removing non-digit characters and ensuring a standard format (e.g., starting with '0' for Vietnam).
+ * @param {string} phone - The raw phone number string.
+ * @returns {string} - The normalized phone number or the original string if no rules apply.
  */
 const normalizePhoneNumber = (phone) => {
     if (!phone) return phone;
-    // Loại bỏ tất cả ký tự không phải số
     let cleanedPhone = phone.replace(/\D/g, '');
 
-    // Nếu số điện thoại bắt đầu bằng '0' và có 10 chữ số (chuẩn VN)
     if (cleanedPhone.startsWith('0') && cleanedPhone.length === 10) {
-        return cleanedPhone; // Giữ nguyên '0'
+        return cleanedPhone;
+    } else if (cleanedPhone.length === 9 && !cleanedPhone.startsWith('0')) {
+        return '0' + cleanedPhone;
     }
-    // Nếu số điện thoại có 9 chữ số (ví dụ: '389456321') và bạn muốn lưu có '0'
-    else if (cleanedPhone.length === 9 && !cleanedPhone.startsWith('0')) {
-        return '0' + cleanedPhone; // Thêm '0' vào đầu
-    }
-    return cleanedPhone; // Trả về như cũ nếu không khớp quy tắc
+    return cleanedPhone;
 };
 
-// --- Quản lý người dùng chung (Parent và Subuser) --- //
-
 /**
- * @desc Lấy danh sách tất cả người dùng trong hệ thống (bao gồm cả parent và subuser).
+ * @function getAllUsers
+ * @description Retrieves a list of all users (parents and subusers) in the system.
  * @route GET /api/users/users
- * @access Public (có thể cần auth cho production)
- * @param {Object} req - Yêu cầu HTTP.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON chứa danh sách người dùng.
- * @throws {Error} - Lỗi server nếu truy vấn thất bại.
+ * @access Public (may require authentication in production)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, and user list.
+ * @throws {Error} - Throws an error if database query fails.
  */
 exports.getAllUsers = async (req, res) => {
     try {
-        // Lấy tất cả người dùng và ẩn trường password
         const users = await User.find().select('-password');
 
         res.status(200).json({
@@ -56,38 +57,32 @@ exports.getAllUsers = async (req, res) => {
     }
 };
 
-// --- Đăng ký và Đăng nhập tài khoản chính (Parent) --- //
-
 /**
- * @desc Đăng ký tài khoản Parent mới.
+ * @function registerParent
+ * @description Registers a new parent account.
  * @route POST /api/users/register
  * @access Public
- * @param {Object} req - Yêu cầu HTTP chứa thông tin đăng ký.
- * @param {Object} req.body - Dữ liệu gửi lên từ client.
- * @param {string} req.body.email - Email của người dùng.
- * @param {string} req.body.password - Mật khẩu của người dùng.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON với thông tin người dùng đã đăng ký.
- * @throws {Error} - Lỗi nếu email đã tồn tại hoặc server gặp sự cố.
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.body - The request body with registration data.
+ * @param {string} req.body.email - The parent's email address.
+ * @param {string} req.body.password - The parent's password (plaintext).
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, and user details.
+ * @throws {Error} - Throws an error if registration fails (e.g., duplicate email, database error).
  */
 exports.registerParent = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Kiểm tra email đã tồn tại chưa
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'Email đã tồn tại.' });
         }
 
-        // Mã hóa mật khẩu
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Tạo người dùng mới với role 'parent' và tự động xác minh
         const newUser = await User.create({
             email,
-            password: hashedPassword,
-            isVerified: true, // Tự động xác minh cho tài khoản parent
+            password,
+            isVerified: true,
             role: 'parent'
         });
 
@@ -102,7 +97,6 @@ exports.registerParent = async (req, res) => {
                 image: newUser.image || ''
             }
         });
-
     } catch (err) {
         console.error('Lỗi đăng ký tài khoản chính:', err);
         res.status(500).json({ success: false, message: 'Lỗi server khi đăng ký tài khoản chính.' });
@@ -110,47 +104,52 @@ exports.registerParent = async (req, res) => {
 };
 
 /**
- * @desc Đăng nhập tài khoản Parent.
+ * @function loginParent
+ * @description Handles login for a parent account.
  * @route POST /api/users/login
  * @access Public
- * @param {Object} req - Yêu cầu HTTP chứa thông tin đăng nhập.
- * @param {Object} req.body - Dữ liệu gửi lên từ client.
- * @param {string} req.body.email - Email của người dùng.
- * @param {string} req.body.password - Mật khẩu của người dùng.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON chứa token và thông tin người dùng.
- * @throws {Error} - Lỗi nếu thông tin đăng nhập sai hoặc tài khoản bị đình chỉ.
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.body - The request body with login data.
+ * @param {string} req.body.email - The parent's email address.
+ * @param {string} req.body.password - The parent's password (plaintext).
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, token, and user details.
+ * @throws {Error} - Throws an error if login fails (e.g., invalid credentials, database error).
  */
 exports.loginParent = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Kiểm tra đầy đủ thông tin
+        console.log(`[LOGIN_PARENT] 📥 Nhận yêu cầu đăng nhập cho email: ${email}`);
+        console.log(`[DEBUG] Mật khẩu người dùng nhập (plaintext): ${password}`);
+
         if (!email || !password) {
+            console.log(`[LOGIN_PARENT] ❌ Lỗi 400: Thiếu email hoặc mật khẩu cho email: ${email || 'không xác định'}.`);
             return res.status(400).json({ success: false, message: 'Vui lòng nhập email và mật khẩu.' });
         }
 
-        // Tìm người dùng với email và role 'parent'
         const user = await User.findOne({ email, role: 'parent' });
         if (!user) {
+            console.log(`[LOGIN_PARENT] ❌ Lỗi 400: Không tìm thấy tài khoản parent với email: ${email} hoặc sai mật khẩu.`);
             return res.status(400).json({ success: false, message: 'Sai tài khoản hoặc mật khẩu.' });
         }
+        console.log(`[LOGIN_PARENT] ✅ Tìm thấy người dùng: ${user._id}, isSuspended: ${user.isSuspended} cho email: ${email}`);
+        console.log(`[DEBUG] Mật khẩu đã hash trong DB: ${user.password}`);
 
-        // --- BẮT ĐẦU THÊM KIỂM TRA isSuspended ---
         if (user.isSuspended) {
-            console.log(`❌ Đăng nhập tài khoản chính thất bại: Tài khoản '${email}' đã bị đình chỉ.`);
+            console.log(`[LOGIN_PARENT] ❌ Lỗi 403: Tài khoản '${email}' đã bị đình chỉ. ID người dùng: ${user._id}`);
             return res.status(403).json({ success: false, message: 'Tài khoản của bạn đã bị đình chỉ. Vui lòng liên hệ quản trị viên.' });
         }
-        // --- KẾT THÚC THÊM KIỂM TRA isSuspended ---
 
-        // So sánh mật khẩu
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+            console.log(`[LOGIN_PARENT] ❌ Lỗi 400: Mật khẩu không khớp cho email: ${email}.`);
             return res.status(400).json({ success: false, message: 'Sai tài khoản hoặc mật khẩu.' });
         }
+        console.log(`[LOGIN_PARENT] ✅ Mật khẩu khớp cho email: ${email}.`);
 
-        // Tạo JWT token
         const token = generateToken({ userId: user._id, role: user.role });
+        console.log(`[LOGIN_PARENT] ✅ Đã tạo JWT token cho người dùng: ${user._id}.`);
 
         res.status(200).json({
             success: true,
@@ -166,46 +165,42 @@ exports.loginParent = async (req, res) => {
                 image: user.image
             }
         });
+        console.log(`[LOGIN_PARENT] ✨ Đăng nhập thành công cho email: ${email}.`);
     } catch (err) {
-        console.error('Lỗi đăng nhập tài khoản chính:', err);
+        console.error(`[LOGIN_PARENT] ❌ Lỗi Server 500 khi đăng nhập tài khoản chính cho email: ${req.body.email || 'không xác định'}. Chi tiết lỗi:`, err);
         res.status(500).json({ success: false, message: 'Lỗi server khi đăng nhập tài khoản chính.' });
     }
 };
 
-// --- Quản lý thông tin tài khoản (Parent hoặc Subuser) --- //
-
 /**
- * @desc Cập nhật thông tin người dùng (fullname, numberphone, image).
+ * @function updateUser
+ * @description Updates user information (fullname, numberphone, image).
  * @route POST /api/users/update
- * @access Private (cần xác thực)
- * @param {Object} req - Yêu cầu HTTP chứa thông tin cần cập nhật.
- * @param {Object} req.body - Dữ liệu gửi lên từ client.
- * @param {string} req.body._id - ID của người dùng cần cập nhật.
- * @param {string} [req.body.fullname] - Tên đầy đủ của người dùng.
- * @param {string} [req.body.numberphone] - Số điện thoại của người dùng.
- * @param {string} [req.body.image] - Đường dẫn ảnh đại diện.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON với thông tin người dùng đã cập nhật.
- * @throws {Error} - Lỗi nếu ID không hợp lệ hoặc người dùng không tồn tại.
+ * @access Private (requires authentication)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.body - The request body with update data.
+ * @param {string} req.body._id - The user's ID.
+ * @param {string} [req.body.fullname] - The updated full name.
+ * @param {string} [req.body.numberphone] - The updated phone number.
+ * @param {string} [req.body.image] - The updated image path.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, and updated user.
+ * @throws {Error} - Throws an error if update fails (e.g., invalid ID, database error).
  */
 exports.updateUser = async (req, res) => {
     try {
         const { _id, fullname, numberphone, image } = req.body;
 
-        // Kiểm tra ID hợp lệ
         if (!_id || !mongoose.Types.ObjectId.isValid(_id)) {
             return res.status(400).json({ success: false, message: 'ID người dùng không hợp lệ.' });
         }
 
-        // Tìm người dùng theo ID
         const user = await User.findById(_id);
         if (!user) {
             return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
         }
 
-        // Cập nhật các trường nếu có
         if (fullname !== undefined) user.fullname = fullname;
-        // Chuẩn hóa số điện thoại trước khi lưu
         if (numberphone !== undefined) user.numberphone = normalizePhoneNumber(numberphone);
         if (image !== undefined) user.image = image;
 
@@ -223,16 +218,18 @@ exports.updateUser = async (req, res) => {
 };
 
 /**
- * @desc Upload ảnh đại diện cho người dùng.
+ * @function uploadAvatar
+ * @description Uploads a profile picture for a user.
  * @route POST /api/users/upload-avatar
- * @access Private (cần xác thực)
- * @param {Object} req - Yêu cầu HTTP chứa file ảnh và userId.
- * @param {Object} req.body - Dữ liệu gửi lên từ client.
- * @param {string} req.body.userId - ID của người dùng.
- * @param {Object} req.file - File ảnh được upload qua middleware Multer.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON với thông tin ảnh và người dùng đã cập nhật.
- * @throws {Error} - Lỗi nếu ID không hợp lệ, người dùng không tồn tại, hoặc không có file ảnh.
+ * @access Private (requires authentication)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.body - The request body with user ID.
+ * @param {string} req.body.userId - The user's ID.
+ * @param {Object} req.file - The uploaded file object (requires multer middleware).
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, image path, token, and user details.
+ * @throws {Error} - Throws an error if upload fails (e.g., invalid ID, no file, database error).
+ * @note Requires `upload.single('avatar')` middleware before this controller.
  */
 exports.uploadAvatar = async (req, res) => {
     try {
@@ -247,17 +244,14 @@ exports.uploadAvatar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
         }
 
-        // Kiểm tra xem có file ảnh được upload không
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'Không tìm thấy file ảnh.' });
         }
 
-        // Lưu đường dẫn file (đường dẫn này phụ thuộc vào cấu hình Multer của bạn)
         const imagePath = `/uploads/${req.file.filename}`;
         user.image = imagePath;
         await user.save();
 
-        // Tạo JWT token mới sau khi cập nhật avatar
         const token = generateToken({ userId: user._id, role: user.role });
 
         res.status(200).json({
@@ -280,18 +274,17 @@ exports.uploadAvatar = async (req, res) => {
     }
 };
 
-// --- Quản lý tài khoản phụ (Subuser) --- //
-
 /**
- * @desc Lấy tất cả danh sách Subuser của một Parent cụ thể.
+ * @function getAllSubusersByParentId
+ * @description Retrieves all subusers for a specific parent.
  * @route GET /api/users/subusers/parent/:parentId
- * @access Private (chỉ parent hoặc admin)
- * @param {Object} req - Yêu cầu HTTP chứa parentId trong params.
- * @param {Object} req.params - Tham số URL.
- * @param {string} req.params.parentId - ID của Parent.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON chứa danh sách subuser.
- * @throws {Error} - Lỗi nếu parentId không hợp lệ hoặc server gặp sự cố.
+ * @access Private (only parent or admin can view their subusers)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.params - The URL parameters.
+ * @param {string} req.params.parentId - The ID of the parent.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, and subuser list.
+ * @throws {Error} - Throws an error if retrieval fails (e.g., invalid ID, database error).
  */
 exports.getAllSubusersByParentId = async (req, res) => {
     try {
@@ -301,7 +294,6 @@ exports.getAllSubusersByParentId = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Parent ID không hợp lệ.' });
         }
 
-        // Tìm tất cả subuser có created_by là parentId
         const subusers = await User.find({ created_by: parentId, role: 'subuser' }).select('-password');
 
         res.status(200).json({
@@ -316,15 +308,16 @@ exports.getAllSubusersByParentId = async (req, res) => {
 };
 
 /**
- * @desc Lấy thông tin một Subuser cụ thể bằng ID.
+ * @function getSubuserById
+ * @description Retrieves information of a specific subuser by ID.
  * @route GET /api/users/subuser/:subuserId
- * @access Private (chỉ parent của subuser hoặc admin)
- * @param {Object} req - Yêu cầu HTTP chứa subuserId trong params.
- * @param {Object} req.params - Tham số URL.
- * @param {string} req.params.subuserId - ID của Subuser.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON chứa thông tin subuser.
- * @throws {Error} - Lỗi nếu subuserId không hợp lệ hoặc không tìm thấy subuser.
+ * @access Private (only parent of the subuser or admin can view)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.params - The URL parameters.
+ * @param {string} req.params.subuserId - The ID of the subuser.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, and subuser details.
+ * @throws {Error} - Throws an error if retrieval fails (e.g., invalid ID, database error).
  */
 exports.getSubuserById = async (req, res) => {
     try {
@@ -334,7 +327,6 @@ exports.getSubuserById = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Subuser ID không hợp lệ.' });
         }
 
-        // Tìm subuser theo ID và đảm bảo đó là subuser
         const subuser = await User.findOne({ _id: subuserId, role: 'subuser' }).select('-password');
 
         if (!subuser) {
@@ -353,102 +345,81 @@ exports.getSubuserById = async (req, res) => {
 };
 
 /**
- * @desc Tạo mới hoặc cập nhật thông tin Subuser.
+ * @function createOrUpdateSubuser
+ * @description Creates or updates a subuser based on phone number and parent ID.
+ * Updates if subuser exists, creates if not, with a limit of 10 subusers per parent.
  * @route POST /api/users/subuser/create-or-update
- * @access Private (chỉ parent)
- * @param {Object} req - Yêu cầu HTTP chứa thông tin subuser.
- * @param {Object} req.body - Dữ liệu gửi lên từ client.
- * @param {string} req.body.numberphone - Số điện thoại của subuser.
- * @param {string} req.body.password - Mật khẩu của subuser.
- * @param {string} req.body.parentId - ID của Parent.
- * @param {string} [req.body.fullname] - Tên đầy đủ của subuser.
- * @param {string} [req.body.image] - Đường dẫn ảnh đại diện.
- * @param {string} [req.body.relationship] - Quan hệ với parent.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON với thông tin subuser đã tạo hoặc cập nhật.
- * @throws {Error} - Lỗi nếu thông tin không hợp lệ, giới hạn subuser, hoặc trùng email.
+ * @access Private (only parent can create/update their subusers)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.body - The request body with subuser data.
+ * @param {string} req.body.numberphone - The subuser's phone number.
+ * @param {string} req.body.password - The subuser's password (plaintext).
+ * @param {string} [req.body.fullname] - The subuser's full name.
+ * @param {string} [req.body.image] - The subuser's image path.
+ * @param {string} req.body.parentId - The ID of the parent.
+ * @param {string} [req.body.relationship] - The relationship with the parent.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, and subuser details.
+ * @throws {Error} - Throws an error if creation/update fails (e.g., invalid data, database error).
  */
 exports.createOrUpdateSubuser = async (req, res) => {
     try {
         let { numberphone, password, fullname, image, parentId } = req.body;
         const relationship = req.body.relationship || 'unknown';
 
-        // --- CONSOLE LOG 1: Log toàn bộ request body nhận được ---
         console.log(`[DEBUG - createOrUpdateSubuser] Received request body: ${JSON.stringify(req.body)}`);
 
-        // Chuẩn hóa số điện thoại
         numberphone = normalizePhoneNumber(numberphone);
-        // --- CONSOLE LOG 2: Log số điện thoại sau khi chuẩn hóa ---
         console.log(`[DEBUG - createOrUpdateSubuser] Normalized numberphone: ${numberphone}`);
 
-        // Kiểm tra các trường bắt buộc
         if (!numberphone || !password || !parentId) {
-            // --- CONSOLE ERROR 3: Cảnh báo lỗi thiếu trường ---
             console.error(`[ERROR - createOrUpdateSubuser] Bad Request: Missing required fields. numberphone: ${!!numberphone}, password: ${!!password}, parentId: ${!!parentId}. Full Request Body: ${JSON.stringify(req.body)}`);
             return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ thông tin: số điện thoại, mật khẩu, và Parent ID.' });
         }
 
-        // Kiểm tra định dạng Parent ID
         if (!mongoose.Types.ObjectId.isValid(parentId)) {
-            // --- CONSOLE ERROR 4: Cảnh báo lỗi định dạng Parent ID ---
             console.error(`[ERROR - createOrUpdateSubuser] Bad Request: Invalid Parent ID format provided: ${parentId}.`);
             return res.status(400).json({ success: false, message: 'Parent ID không hợp lệ.' });
         }
 
-        // Đảm bảo parentId tồn tại và có role 'parent'
         const parent = await User.findOne({ _id: parentId, role: 'parent' });
-        // --- CONSOLE LOG 5: Kiểm tra kết quả tìm Parent ---
         console.log(`[DEBUG - createOrUpdateSubuser] Parent check result for ID ${parentId}: ${parent ? 'Found' : 'Not Found or wrong role'}`);
         if (!parent) {
-            // --- CONSOLE ERROR 6: Cảnh báo Parent không tồn tại ---
             console.error(`[ERROR - createOrUpdateSubuser] Bad Request: Parent account not found or does not have 'parent' role for ID: ${parentId}.`);
             return res.status(400).json({ success: false, message: 'Không tìm thấy tài khoản Parent với Parent ID này.' });
         }
 
-        // Hash mật khẩu
         const hashedPassword = await bcrypt.hash(password, 10);
-        // --- CONSOLE LOG 7: Thông báo mật khẩu đã được hash ---
         console.log(`[DEBUG - createOrUpdateSubuser] Password hashed successfully for numberphone: ${numberphone}`);
 
-        // Tìm subuser hiện có bằng numberphone và parentId
         let subuser = await User.findOne({ numberphone, role: 'subuser', created_by: parentId });
-        // --- CONSOLE LOG 8: Thông báo kết quả tìm kiếm subuser hiện có ---
-        console.log(`[DEBUG - createOrUpdateSubuser] Searching for existing subuser with numberphone ${numberphone} and created_by ${parentId}. Found: ${subuser ? 'Yes, ID: ' + subuser._id : 'No'}.`);
+        console.log(`[DEBUG - createOrUpdateSubuser] Searching for existing subuser with numberphone ${numberphone} and created_by ${parentId}. Found: ${subuser ? 'Yes, ID: ' + subuser._id : 'No'}`);
 
         if (subuser) {
-            // --- CONSOLE INFO 9: Bắt đầu quá trình cập nhật subuser ---
             console.log(`[INFO - createOrUpdateSubuser] Updating existing subuser (ID: ${subuser._id}) for parent (ID: ${parentId}).`);
 
-            // Cập nhật các trường
             subuser.password = hashedPassword;
             subuser.fullname = fullname ?? subuser.fullname;
             subuser.image = image ?? subuser.image;
             subuser.relationship = relationship;
 
             await subuser.save();
-            // --- CONSOLE INFO 10: Thông báo cập nhật thành công ---
             console.log(`[INFO - createOrUpdateSubuser] Subuser (ID: ${subuser._id}) updated successfully.`);
 
             return res.status(200).json({ success: true, message: 'Cập nhật subuser thành công.', user: subuser });
         }
 
-        // Nếu subuser chưa tồn tại, kiểm tra giới hạn số lượng subuser
         const subuserCount = await User.countDocuments({ role: 'subuser', created_by: parentId });
-        // --- CONSOLE LOG 11: Thông báo số lượng subuser hiện tại ---
-        console.log(`[DEBUG - createOrUpdateSubuser] Subuser count for parent ${parentId}: ${subuserCount}.`);
+        console.log(`[DEBUG - createOrUpdateSubuser] Subuser count for parent ${parentId}: ${subuserCount}`);
 
         if (subuserCount >= 10) {
-            // --- CONSOLE WARN 12: Cảnh báo vượt quá giới hạn subuser ---
             console.warn(`[WARN - createOrUpdateSubuser] Failed to create subuser: Parent ${parentId} has reached the limit of 10 subusers.`);
             return res.status(400).json({ success: false, message: 'Tài khoản Parent đã đạt giới hạn 10 subuser.' });
         }
 
-        // Tạo email placeholder duy nhất cho subuser mới
         const uniqueEmail = `subuser_${Date.now()}_${crypto.randomBytes(4).toString('hex')}@fmcarer.com`;
-        // --- CONSOLE LOG 13: Thông báo email placeholder được tạo ---
         console.log(`[DEBUG - createOrUpdateSubuser] Generated unique email for new subuser: ${uniqueEmail}`);
 
-        // Tạo subuser mới
         subuser = new User({
             numberphone,
             password: hashedPassword,
@@ -460,40 +431,35 @@ exports.createOrUpdateSubuser = async (req, res) => {
         });
 
         await subuser.save();
-        // --- CONSOLE INFO 14: Thông báo tạo subuser mới thành công ---
         console.log(`[INFO - createOrUpdateSubuser] New subuser created successfully. Subuser ID: ${subuser._id}.`);
 
         return res.status(201).json({ success: true, message: 'Tạo subuser thành công.', user: subuser });
-
     } catch (error) {
-        // --- CONSOLE ERROR 15: Log lỗi tổng quát (quan trọng) ---
         console.error(`[CRITICAL ERROR - createOrUpdateSubuser] Caught exception: ${error.message}`);
         console.error(`Stack trace:`, error.stack);
         console.error(`Request body that caused error:`, req.body);
         console.error(`Full error object:`, error);
 
-        // Xử lý lỗi trùng lặp email (MongoDB E11000 duplicate key error)
         if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
-            // --- CONSOLE WARN 16: Cảnh báo lỗi trùng lặp email ---
             console.warn(`[WARN - createOrUpdateSubuser] Duplicate email error detected during subuser creation/update. Email pattern: ${JSON.stringify(error.keyPattern)}`);
             return res.status(400).json({ success: false, message: 'Lỗi trùng lặp email. Vui lòng thử lại hoặc liên hệ hỗ trợ.' });
         }
 
-        // Trả về lỗi server mặc định
         res.status(500).json({ success: false, message: 'Lỗi server khi xử lý subuser.', error: error.message });
     }
 };
 
 /**
- * @desc Xóa một Subuser cụ thể.
+ * @function deleteSubuser
+ * @description Deletes a specific subuser.
  * @route DELETE /api/users/subuser/:subuserId
- * @access Private (chỉ parent của subuser hoặc admin)
- * @param {Object} req - Yêu cầu HTTP chứa subuserId trong params.
- * @param {Object} req.params - Tham số URL.
- * @param {string} req.params.subuserId - ID của Subuser cần xóa.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON xác nhận xóa thành công.
- * @throws {Error} - Lỗi nếu subuserId không hợp lệ hoặc không tìm thấy subuser.
+ * @access Private (only parent of the subuser or admin can delete)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.params - The URL parameters.
+ * @param {string} req.params.subuserId - The ID of the subuser to delete.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status and message.
+ * @throws {Error} - Throws an error if deletion fails (e.g., invalid ID, database error).
  */
 exports.deleteSubuser = async (req, res) => {
     try {
@@ -503,7 +469,6 @@ exports.deleteSubuser = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ID subuser không hợp lệ.' });
         }
 
-        // Tìm và xóa subuser. Đảm bảo chỉ xóa subuser
         const result = await User.deleteOne({ _id: subuserId, role: 'subuser' });
 
         if (result.deletedCount === 0) {
@@ -518,41 +483,38 @@ exports.deleteSubuser = async (req, res) => {
 };
 
 /**
- * @desc Đăng nhập tài khoản Subuser.
+ * @function loginSubuser
+ * @description Handles login for a subuser account.
  * @route POST /api/users/login-subuser
  * @access Public
- * @param {Object} req - Yêu cầu HTTP chứa thông tin đăng nhập.
- * @param {Object} req.body - Dữ liệu gửi lên từ client.
- * @param {string} req.body.numberphone - Số điện thoại của subuser.
- * @param {string} req.body.password - Mật khẩu của subuser.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON chứa token và thông tin subuser.
- * @throws {Error} - Lỗi nếu thông tin đăng nhập sai hoặc server gặp sự cố.
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.body - The request body with login data.
+ * @param {string} req.body.numberphone - The subuser's phone number.
+ * @param {string} req.body.password - The subuser's password (plaintext).
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status, message, token, and user details.
+ * @throws {Error} - Throws an error if login fails (e.g., invalid credentials, database error).
  */
 exports.loginSubuser = async (req, res) => {
     try {
         let { numberphone, password } = req.body;
 
-        // Chuẩn hóa số điện thoại trước khi sử dụng để tìm kiếm
         numberphone = normalizePhoneNumber(numberphone);
 
         if (!numberphone || !password) {
             return res.status(400).json({ success: false, message: 'Thiếu số điện thoại hoặc mật khẩu.' });
         }
 
-        // Tìm người dùng với numberphone và role 'subuser'
         const user = await User.findOne({ numberphone, role: 'subuser' });
         if (!user) {
             return res.status(400).json({ success: false, message: 'Số điện thoại hoặc mật khẩu sai.' });
         }
 
-        // So sánh mật khẩu
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ success: false, message: 'Số điện thoại hoặc mật khẩu sai.' });
         }
 
-        // Tạo JWT token cho subuser
         const token = generateToken({ userId: user._id, role: user.role });
 
         res.status(200).json({
@@ -576,16 +538,17 @@ exports.loginSubuser = async (req, res) => {
 };
 
 /**
- * @desc Xác thực mật khẩu của người dùng.
+ * @function verifyPassword
+ * @description Verifies a user's password.
  * @route POST /api/users/verify-password
- * @access Private
- * @param {Object} req - Yêu cầu HTTP chứa userId và password.
- * @param {Object} req.body - Dữ liệu gửi lên từ client.
- * @param {string} req.body.userId - ID của người dùng.
- * @param {string} req.body.password - Mật khẩu cần xác thực.
- * @param {Object} res - Đối tượng phản hồi HTTP.
- * @returns {Object} - Phản hồi JSON xác nhận mật khẩu hợp lệ.
- * @throws {Error} - Lỗi nếu userId không hợp lệ, người dùng không tồn tại, hoặc mật khẩu sai.
+ * @access Private (requires authentication)
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} req.body - The request body with verification data.
+ * @param {string} req.body.userId - The user's ID.
+ * @param {string} req.body.password - The password to verify (plaintext).
+ * @param {Object} res - The HTTP response object.
+ * @returns {Object} - JSON response with success status and message.
+ * @throws {Error} - Throws an error if verification fails (e.g., invalid ID, database error).
  */
 exports.verifyPassword = async (req, res) => {
     try {
@@ -601,7 +564,6 @@ exports.verifyPassword = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Người dùng không tồn tại.' });
         }
 
-        // So sánh mật khẩu được cung cấp với mật khẩu đã hash trong DB
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
@@ -609,7 +571,6 @@ exports.verifyPassword = async (req, res) => {
         }
 
         res.status(200).json({ success: true, message: 'Mật khẩu đã được xác thực thành công.' });
-
     } catch (err) {
         console.error('Lỗi khi xác thực mật khẩu:', err);
         res.status(500).json({ success: false, message: 'Lỗi server khi xác thực mật khẩu.' });

@@ -1,105 +1,99 @@
+/**
+ * @file models/User.js
+ * @description Mongoose schema định nghĩa cấu trúc người dùng cho hệ thống FMCarer.
+ */
+
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs'); // Import bcryptjs để xử lý mật khẩu
+const bcrypt = require('bcryptjs');
 
 /**
- * @desc Định nghĩa schema cho User, lưu trữ thông tin người dùng (parent, subuser, admin).
- * @typedef {Object} User
- * @property {string} [email] - Email của người dùng, bắt buộc với parent và admin, duy nhất nếu có.
- * @property {string} password - Mật khẩu đã được hash của người dùng.
- * @property {string} role - Vai trò của người dùng: 'parent', 'subuser', hoặc 'admin'.
- * @property {mongoose.Schema.Types.ObjectId} [created_by] - ID của người dùng tạo ra (dùng cho subuser).
- * @property {mongoose.Decimal128} balance - Số dư tài khoản, mặc định là 0.00.
- * @property {boolean} isVerified - Trạng thái xác minh tài khoản, mặc định là false.
- * @property {string} fullname - Tên đầy đủ của người dùng, mặc định là chuỗi rỗng.
- * @property {string} [numberphone] - Số điện thoại, bắt buộc và duy nhất với subuser.
- * @property {string} image - Đường dẫn ảnh đại diện, mặc định là chuỗi rỗng.
- * @property {boolean} isSuspended - Trạng thái đình chỉ tài khoản, mặc định là false.
- * @property {Date} created_at - Thời gian tạo tài khoản, mặc định là thời điểm hiện tại.
- * @property {Object} _id - ID tự động của document trong MongoDB.
+ * Lấy thời gian hiện tại theo múi giờ Việt Nam (UTC+7)
+ * @returns {Date} - Thời gian hiện tại tại Việt Nam
  */
+function getVietnamTime() {
+    const now = new Date();
+    now.setHours(now.getHours() + 7);
+    return now;
+}
+
+/**
+ * @typedef {Object} User
+ * @property {string} email - Địa chỉ email người dùng (không yêu cầu cho subuser)
+ * @property {string} password - Mật khẩu đã mã hóa
+ * @property {'parent'|'subuser'|'admin'} role - Vai trò của người dùng
+ * @property {mongoose.ObjectId|null} created_by - ID người dùng tạo ra (chỉ áp dụng với subuser)
+ * @property {mongoose.Types.Decimal128} balance - Số dư tài khoản
+ * @property {boolean} isVerified - Đã xác minh email hay chưa
+ * @property {string} fullname - Họ tên đầy đủ
+ * @property {string} numberphone - Số điện thoại (bắt buộc cho subuser)
+ * @property {string} image - Đường dẫn ảnh đại diện
+ * @property {boolean} isSuspended - Tài khoản có đang bị đình chỉ không
+ * @property {Date} created_at - Thời điểm tạo tài khoản
+ */
+
 const UserSchema = new mongoose.Schema({
     email: {
         type: String,
-        required: function () {
-            return this.role !== 'subuser'; // Subuser không cần email
-        },
+        required: function () { return this.role !== 'subuser'; },
         unique: true,
-        sparse: true, // Chỉ enforce unique nếu có giá trị
+        sparse: true,
         maxlength: 100
     },
-
     password: {
         type: String,
         required: true
     },
-
     role: {
         type: String,
         enum: ['parent', 'subuser', 'admin'],
         default: 'parent',
         index: true
     },
-
     created_by: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default: null,
         index: true
     },
-
     balance: {
         type: mongoose.Decimal128,
         default: 0.00
     },
-
     isVerified: {
         type: Boolean,
         default: false
     },
-
     fullname: {
         type: String,
         default: ''
     },
-
     numberphone: {
         type: String,
-        required: function () {
-            return this.role === 'subuser'; // Subuser bắt buộc có số điện thoại
-        },
-        unique: function () {
-            return this.role === 'subuser'; // Unique chỉ cho subuser
-        },
+        required: function () { return this.role === 'subuser'; },
+        unique: function () { return this.role === 'subuser'; },
         sparse: true
     },
-
     image: {
         type: String,
         default: ''
     },
-
-    // THÊM TRƯỜNG isSuspended VÀO ĐÂY
     isSuspended: {
         type: Boolean,
-        default: false, // Mặc định là không bị đình chỉ
-        index: true // Thêm index để truy vấn nhanh hơn
+        default: false,
+        index: true
     },
-
     created_at: {
         type: Date,
-        default: Date.now
+        default: getVietnamTime
     }
 }, {
     collection: 'users'
 });
 
-// THÊM CÁC PHƯƠNG THỨC TRƯỚC KHI COMPILE MODEL (ví dụ: hash mật khẩu, so sánh mật khẩu)
-
 /**
- * @desc Mã hóa mật khẩu trước khi lưu vào cơ sở dữ liệu.
- * @param {Function} next - Hàm middleware tiếp theo trong chuỗi.
- * @returns {Promise<void>} - Gọi next() sau khi mã hóa mật khẩu.
- * @throws {Error} - Lỗi nếu quá trình mã hóa mật khẩu thất bại.
+ * Mongoose middleware: Hash mật khẩu trước khi lưu nếu nó đã bị thay đổi.
+ * @function
+ * @name UserSchema.pre('save')
  */
 UserSchema.pre('save', async function (next) {
     if (this.isModified('password')) {
@@ -110,11 +104,9 @@ UserSchema.pre('save', async function (next) {
 });
 
 /**
- * @desc So sánh mật khẩu người dùng nhập với mật khẩu đã hash.
- * @method comparePassword
- * @param {string} candidatePassword - Mật khẩu cần so sánh.
- * @returns {Promise<boolean>} - Trả về true nếu mật khẩu khớp, false nếu không.
- * @throws {Error} - Lỗi nếu quá trình so sánh mật khẩu thất bại.
+ * So sánh mật khẩu do người dùng nhập với mật khẩu đã mã hóa trong CSDL.
+ * @param {string} candidatePassword - Mật khẩu đầu vào từ người dùng
+ * @returns {Promise<boolean>} - Trả về true nếu khớp, ngược lại false
  */
 UserSchema.methods.comparePassword = async function (candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);

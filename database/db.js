@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const User = require('../models/User'); // Đảm bảo đúng đường dẫn đến model
+const User = require('../models/User');
 
 /**
  * @desc Kết nối đến cơ sở dữ liệu MongoDB và tạo tài khoản admin mặc định nếu chưa tồn tại.
@@ -15,17 +15,15 @@ const connectDB = async () => {
         });
         console.log('✅ MongoDB connected!');
 
-        // Tạo admin nếu chưa tồn tại
         const adminEmail = 'giangfake4@gmail.com';
-        const adminPassword = 'Admin@1234';
+        const adminPassword = 'Admin@123#';
 
         const existingAdmin = await User.findOne({ email: adminEmail });
 
         if (!existingAdmin) {
-            const hashedPassword = await bcrypt.hash(adminPassword, 10);
             const newAdmin = new User({
                 email: adminEmail,
-                password: hashedPassword,
+                password: adminPassword, // Để pre('save') mã hóa
                 role: 'admin',
                 isVerified: true,
                 fullname: 'Trinh Van Giang'
@@ -36,7 +34,6 @@ const connectDB = async () => {
         } else {
             console.log('ℹ️ Admin đã tồn tại, không cần tạo lại');
         }
-
     } catch (err) {
         console.error('❌ MongoDB connection failed:', err.message);
         process.exit(1);
